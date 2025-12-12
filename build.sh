@@ -26,6 +26,10 @@ cp .build/release/ManoScrollApp "$MACOS_DIR/ManoScrollApp"
 echo "Copying Info.plist..."
 cp ManoScrollApp/Info.plist "$CONTENTS_DIR/Info.plist"
 
+# Copy app icon
+echo "Copying app icon..."
+cp AppIcon.icns "$RESOURCES_DIR/AppIcon.icns"
+
 # Create PkgInfo
 echo "APPL????" > "$CONTENTS_DIR/PkgInfo"
 

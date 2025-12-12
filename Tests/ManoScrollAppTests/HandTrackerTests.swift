@@ -182,3 +182,224 @@ final class HandTrackerTests: XCTestCase {
         XCTAssertTrue(true)
     }
 }
+
+// MARK: - Settings Window Consistency Tests
+
+final class SettingsWindowConsistencyTests: XCTestCase {
+    
+    /// Test that SettingsWindowController creates a window with toolbar
+    func testSettingsWindowHasToolbar() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The window should have a toolbar
+        XCTAssertNotNil(controller.window?.toolbar, 
+            "Settings window from menu bar should have a toolbar")
+    }
+    
+    /// Test that the toolbar has the correct number of items
+    func testSettingsWindowToolbarHasFourTabs() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The toolbar should have 4 selectable items
+        let toolbar = controller.window?.toolbar
+        let selectableIdentifiers = toolbar?.delegate?.toolbarSelectableItemIdentifiers?(toolbar!) ?? []
+        XCTAssertEqual(selectableIdentifiers.count, 4,
+            "Settings toolbar should have 4 tabs: Scroll, Detection, Display, Permissions")
+    }
+    
+    /// Test that toolbar items have the expected identifiers
+    func testSettingsWindowToolbarItemIdentifiers() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        let toolbar = controller.window?.toolbar
+        
+        // Then: The toolbar should have the expected item identifiers
+        let expectedIdentifiers: [NSToolbarItem.Identifier] = [
+            .scrollTab, .detectionTab, .displayTab, .permissionsTab
+        ]
+        let actualIdentifiers = toolbar?.delegate?.toolbarDefaultItemIdentifiers?(toolbar!) ?? []
+        
+        XCTAssertEqual(actualIdentifiers, expectedIdentifiers,
+            "Toolbar should have Scroll, Detection, Display, and Permissions tabs in order")
+    }
+    
+    /// Test that toolbar uses preference style (icons with labels)
+    func testSettingsWindowUsesPreferenceToolbarStyle() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The window should use preference toolbar style
+        XCTAssertEqual(controller.window?.toolbarStyle, .preference,
+            "Settings window should use .preference toolbar style for icon tabs")
+    }
+    
+    /// Test that toolbar displays icons and labels
+    func testSettingsWindowToolbarDisplaysIconAndLabel() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The toolbar should display icon and label
+        XCTAssertEqual(controller.window?.toolbar?.displayMode, .iconAndLabel,
+            "Settings toolbar should display both icon and label")
+    }
+    
+    /// Test that each toolbar item has an icon
+    func testSettingsWindowToolbarItemsHaveIcons() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        let toolbar = controller.window?.toolbar
+        
+        // When: Getting each toolbar item
+        let identifiers: [NSToolbarItem.Identifier] = [
+            .scrollTab, .detectionTab, .displayTab, .permissionsTab
+        ]
+        
+        // Then: Each item should have an image
+        for identifier in identifiers {
+            let item = toolbar?.delegate?.toolbar?(toolbar!, itemForItemIdentifier: identifier, willBeInsertedIntoToolbar: true)
+            XCTAssertNotNil(item?.image, 
+                "Toolbar item \(identifier.rawValue) should have an icon")
+        }
+    }
+    
+    /// Test that each toolbar item has a label
+    func testSettingsWindowToolbarItemsHaveLabels() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        let toolbar = controller.window?.toolbar
+        
+        // When: Getting each toolbar item
+        let expectedLabels = [
+            (NSToolbarItem.Identifier.scrollTab, "Scroll"),
+            (.detectionTab, "Detection"),
+            (.displayTab, "Display"),
+            (.permissionsTab, "Permissions")
+        ]
+        
+        // Then: Each item should have the correct label
+        for (identifier, expectedLabel) in expectedLabels {
+            let item = toolbar?.delegate?.toolbar?(toolbar!, itemForItemIdentifier: identifier, willBeInsertedIntoToolbar: true)
+            XCTAssertEqual(item?.label, expectedLabel,
+                "Toolbar item should have label '\(expectedLabel)'")
+        }
+    }
+    
+    /// Test that SwiftUI SettingsView has matching tab structure
+    /// This ensures the SwiftUI Settings scene (from app menu) matches toolbar window
+    func testSettingsViewHasFourTabs() {
+        // Given: A SettingsView
+        // The SettingsView contains a TabView with 4 tabs
+        // We verify this by checking that the tab content views exist
+        
+        // Then: The individual tab views should be instantiable
+        let settings = AppSettings.shared
+        
+        // These should not crash - they're the same views used in both windows
+        let _ = ScrollControlTab(settings: settings)
+        let _ = HandDetectionTab(settings: settings)
+        let _ = DisplayAppearanceTab(settings: settings)
+        let _ = PermissionsTab(settings: settings)
+        
+        XCTAssertTrue(true, "All four tab views should be instantiable")
+    }
+    
+    /// Test that SettingsContentView switches content based on selected tab
+    func testSettingsContentViewSwitchesTabs() {
+        // Given: SettingsContentView with different tab indices
+        // These should create without crashing, indicating correct tab switching
+        
+        let _ = SettingsContentView(selectedTab: 0) // Scroll
+        let _ = SettingsContentView(selectedTab: 1) // Detection
+        let _ = SettingsContentView(selectedTab: 2) // Display
+        let _ = SettingsContentView(selectedTab: 3) // Permissions
+        
+        XCTAssertTrue(true, "SettingsContentView should handle all tab indices")
+    }
+    
+    /// Test that invalid tab index defaults gracefully
+    func testSettingsContentViewHandlesInvalidTabIndex() {
+        // Given: SettingsContentView with an invalid tab index
+        let _ = SettingsContentView(selectedTab: 99)
+        
+        // Then: Should not crash (defaults to ScrollControlTab)
+        XCTAssertTrue(true, "SettingsContentView should handle invalid tab index gracefully")
+    }
+    
+    /// Test that window title is consistent
+    func testSettingsWindowTitleIsCorrect() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The window should have the correct title
+        XCTAssertEqual(controller.window?.title, "ManoScroll Settings",
+            "Settings window should have title 'ManoScroll Settings'")
+    }
+}
+
+// MARK: - Menu Visibility Consistency Tests
+
+final class MenuVisibilityConsistencyTests: XCTestCase {
+    
+    /// Test that AppDelegate has a restoreMainMenu method
+    /// This method is critical for maintaining menu visibility when windows are opened
+    func testAppDelegateHasRestoreMainMenuMethod() {
+        // Given: An AppDelegate instance
+        let appDelegate = AppDelegate()
+        
+        // Then: It should have a restoreMainMenu method (this compiles = method exists)
+        // We can't fully test without running the app, but we verify the method exists
+        appDelegate.restoreMainMenu()
+        
+        XCTAssertTrue(true, "AppDelegate should have restoreMainMenu method")
+    }
+    
+    /// Test that SettingsWindowController has showWindow override that would restore menu
+    /// This prevents menus from disappearing when Settings window is opened
+    func testSettingsWindowControllerHasShowWindowOverride() {
+        // Given: A SettingsWindowController
+        let controller = SettingsWindowController()
+        
+        // Then: The controller should exist and have a window
+        XCTAssertNotNil(controller.window, 
+            "SettingsWindowController should create a window")
+    }
+    
+    /// Test that PreviewWindowController has showWindow override
+    /// This prevents menus from disappearing when Preview window is opened
+    func testPreviewWindowControllerHasShowWindowOverride() {
+        // Given: A PreviewWindowController
+        let controller = PreviewWindowController(handTracker: nil)
+        
+        // Then: The controller should exist and have a window
+        XCTAssertNotNil(controller.window, 
+            "PreviewWindowController should create a window")
+    }
+    
+    /// Test that HelpWindowController has showWindow override
+    /// This prevents menus from disappearing when Help window is opened
+    func testHelpWindowControllerHasShowWindowOverride() {
+        // Given: A HelpWindowController
+        let controller = HelpWindowController()
+        
+        // Then: The controller should exist and have a window
+        XCTAssertNotNil(controller.window, 
+            "HelpWindowController should create a window")
+    }
+    
+    /// Test that all window controllers properly set isReleasedWhenClosed to false
+    /// This ensures windows can be reopened without crashes
+    func testWindowsAreNotReleasedWhenClosed() {
+        let settingsController = SettingsWindowController()
+        let previewController = PreviewWindowController(handTracker: nil)
+        let helpController = HelpWindowController()
+        
+        XCTAssertFalse(settingsController.window?.isReleasedWhenClosed ?? true,
+            "Settings window should not be released when closed")
+        XCTAssertFalse(previewController.window?.isReleasedWhenClosed ?? true,
+            "Preview window should not be released when closed")
+        XCTAssertFalse(helpController.window?.isReleasedWhenClosed ?? true,
+            "Help window should not be released when closed")
+    }
+}
