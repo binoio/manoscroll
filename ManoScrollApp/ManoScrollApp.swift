@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var menuRestoreTimer: Timer?
     private var hiddenWindow: NSWindow?  // Hidden window to keep menu active
     private var alwaysOnTopEnabled = false
+    private var closeMenuItem: NSMenuItem?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create a hidden window to maintain menu bar presence
@@ -141,12 +142,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // This combats SwiftUI's tendency to reset the menu after a window closes
         startMenuRestoreTimer()
         
+        // Update close menu state
+        updateCloseMenuItemEnabled()
+        
         // Also schedule a check to ensure we have the menu after all windows close
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             // If no windows are key, we still need to restore the menu
             if NSApp.keyWindow == nil {
                 self?.restoreMainMenu()
             }
+            self?.updateCloseMenuItemEnabled()
         }
     }
     
@@ -201,9 +206,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         newPreviewItem.target = self
         fileMenu.addItem(newPreviewItem)
         fileMenu.addItem(NSMenuItem.separator())
-        fileMenu.addItem(NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        let closeItem = NSMenuItem(title: "Close", action: #selector(closeFrontWindow(_:)), keyEquivalent: "w")
+        closeItem.target = self
+        closeItem.isEnabled = false
+        fileMenu.addItem(closeItem)
         fileMenuItem.submenu = fileMenu
         mainMenu.addItem(fileMenuItem)
+        self.closeMenuItem = closeItem
         
         // Edit menu
         let editMenuItem = NSMenuItem()
