@@ -49,6 +49,30 @@ final class MenuConsistencyUITests: XCTestCase {
         let menuTitles = getMenuBarItems()
         assertEssentialMenusPresent(menuTitles, context: "at app launch")
     }
+
+    /// Test that "Close" menu item is disabled when there are no open windows
+    func testCloseMenuDisabledWhenNoWindows() throws {
+        // Close any existing windows
+        for i in 0..<app.windows.count {
+            let w = app.windows.element(boundBy: i)
+            if w.exists {
+                let closeButton = w.buttons[XCUIIdentifierCloseWindow]
+                if closeButton.exists {
+                    closeButton.click()
+                    sleep(1)
+                }
+            }
+        }
+        // Wait for menus to update
+        sleep(1)
+
+        let fileMenu = app.menuBars.menuBarItems["File"]
+        XCTAssertTrue(fileMenu.exists, "File menu should exist")
+        fileMenu.click()
+        let closeItem = app.menuItems["Close"]
+        XCTAssertTrue(closeItem.exists, "Close menu item should exist")
+        XCTAssertFalse(closeItem.isEnabled, "Close should be disabled when no windows are open")
+    }
     
     /// Test that menus are restored after Settings window is opened and closed
     /// This is the core regression test for the menu disappearance bug
