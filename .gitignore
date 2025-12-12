@@ -1,0 +1,15 @@
+# Build artifacts
+.build/
+ManoScroll.app/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.dSYM
+.DS_Store
