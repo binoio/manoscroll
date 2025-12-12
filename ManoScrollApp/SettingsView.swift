@@ -121,9 +121,39 @@ struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
     
     var body: some View {
+        TabView {
+            ScrollControlTab(settings: settings)
+                .tabItem {
+                    Label("Scroll", systemImage: "arrow.up.arrow.down")
+                }
+            
+            HandDetectionTab(settings: settings)
+                .tabItem {
+                    Label("Detection", systemImage: "hand.raised")
+                }
+            
+            DisplayAppearanceTab(settings: settings)
+                .tabItem {
+                    Label("Display", systemImage: "display")
+                }
+            
+            PermissionsTab(settings: settings)
+                .tabItem {
+                    Label("Permissions", systemImage: "lock.shield")
+                }
+        }
+        .frame(width: 550, height: 450)
+        .padding()
+    }
+}
+
+struct ScrollControlTab: View {
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
         ScrollView {
             Form {
-                Section(header: Text("Scroll Control")) {
+                Section {
                     VStack(alignment: .leading) {
                         HStack {
                             Text("Scroll Speed")
@@ -214,8 +244,19 @@ struct SettingsView: View {
                         }
                     }
                 }
-                
-                Section(header: Text("Hand Detection")) {
+            }
+            .formStyle(.grouped)
+        }
+    }
+}
+
+struct HandDetectionTab: View {
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        ScrollView {
+            Form {
+                Section {
                     VStack(alignment: .leading) {
                         HStack {
                             Text("Detection Confidence")
@@ -266,62 +307,88 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
-                Section(header: Text("Display")) {
-                    Toggle("Show Camera Preview Window", isOn: $settings.showPreviewWindow)
-                }
-                
-                Section(header: Text("App Appearance")) {
-                    Toggle("Show in Dock", isOn: $settings.showInDock)
-                    Toggle("Show in Menu Bar", isOn: $settings.showInMenuBar)
-                    Text("At least one must be enabled")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Section(header: Text("Permissions")) {
+            }
+            .formStyle(.grouped)
+        }
+    }
+}
+
+struct DisplayAppearanceTab: View {
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        Form {
+            Section(header: Text("Camera Preview")) {
+                Toggle("Show Camera Preview Window", isOn: $settings.showPreviewWindow)
+                Text("Display live camera feed when tracking")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("App Visibility")) {
+                Toggle("Show in Dock", isOn: $settings.showInDock)
+                Toggle("Show in Menu Bar", isOn: $settings.showInMenuBar)
+                Text("At least one must be enabled")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct PermissionsTab: View {
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        Form {
+            Section(header: Text("Required Permissions")) {
+                VStack(alignment: .leading, spacing: 8) {
                     Button("Open Accessibility Settings") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                    Text("CGEvent scroll injection requires Accessibility permission")
+                    Text("Required for scroll injection. Add ManoScroll to allowed apps.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
                     Button("Open Camera Settings") {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                }
-                
-                Section {
-                    Button("Reset to Defaults") {
-                        settings.scrollSpeed = 3.0
-                        settings.smoothingFactor = 0.3
-                        settings.detectionConfidence = 0.5
-                        settings.scrollThreshold = 0.3
-                        settings.invertScroll = false
-                        settings.showPreviewWindow = true
-                        settings.decayRate = 0.8
-                        settings.openPalmThreshold = 4
-                        settings.fistThreshold = 1
-                        settings.leftHandMode = false
-                        settings.scrollMode = .pixel
-                        settings.deadZone = 0.0
-                        settings.accelerationEnabled = false
-                        settings.accelerationFactor = 1.5
-                        settings.showInDock = true
-                        settings.showInMenuBar = true
-                    }
-                    .foregroundColor(.red)
+                    Text("Required for hand tracking via webcam.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
-            .formStyle(.grouped)
+            
+            Section(header: Text("Reset")) {
+                Button("Reset All Settings to Defaults") {
+                    settings.scrollSpeed = 3.0
+                    settings.smoothingFactor = 0.3
+                    settings.detectionConfidence = 0.5
+                    settings.scrollThreshold = 0.3
+                    settings.invertScroll = false
+                    settings.showPreviewWindow = true
+                    settings.decayRate = 0.8
+                    settings.openPalmThreshold = 4
+                    settings.fistThreshold = 1
+                    settings.leftHandMode = false
+                    settings.scrollMode = .pixel
+                    settings.deadZone = 0.0
+                    settings.accelerationEnabled = false
+                    settings.accelerationFactor = 1.5
+                    settings.showInDock = true
+                    settings.showInMenuBar = true
+                }
+                .foregroundColor(.red)
+            }
         }
-        .frame(width: 450, height: 600)
-        .padding()
+        .formStyle(.grouped)
     }
 }
 
