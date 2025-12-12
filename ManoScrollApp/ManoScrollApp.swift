@@ -27,7 +27,7 @@ private struct EmptyView: View {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem?
     var handTracker: HandTracker?
     var settingsWindowController: SettingsWindowController?
@@ -37,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainMenu: NSMenu?
     private var menuRestoreTimer: Timer?
     private var hiddenWindow: NSWindow?  // Hidden window to keep menu active
+    private var alwaysOnTopEnabled = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create a hidden window to maintain menu bar presence
@@ -217,8 +218,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // View menu
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
-        viewMenu.autoenablesItems = true
+        viewMenu.autoenablesItems = false  // We manage enabled state manually
+        let alwaysOnTopItem = NSMenuItem(title: "Always on Top", action: #selector(toggleAlwaysOnTop(_:)), keyEquivalent: "t")
+        alwaysOnTopItem.keyEquivalentModifierMask = [.command, .shift]
+        alwaysOnTopItem.target = self
+        viewMenu.addItem(alwaysOnTopItem)
+        viewMenu.addItem(NSMenuItem.separator())
         viewMenu.addItem(NSMenuItem(title: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f"))
+        viewMenu.delegate = self  // Set delegate to update checkmark state
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
         
@@ -401,6 +408,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         handTracker?.stopTracking()
         NSApplication.shared.terminate(nil)
     }
+    
+    @objc func toggleAlwaysOnTop(_ sender: NSMenuItem) {
+        alwaysOnTopEnabled.toggle()
+        sender.state = alwaysOnTopEnabled ? .on : .off
+        
+        // Apply to all preview windows
+        for controller in previewWindows {
+            if let window = controller.window, window.isVisible {
+                window.level = alwaysOnTopEnabled ? .floating : .normal
+            }
+        }
+        
+        // Also apply to HandTracker's preview window if it exists
+        if let previewWindow = handTracker?.previewWindow {
+            previewWindow.level = alwaysOnTopEnabled ? .floating : .normal
+        }
+    }
+    
+    // NSMenuDelegate - update menu item states before display
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Update Always on Top checkmark
+        if let viewMenu = mainMenu?.item(withTitle: "View")?.submenu,
+           let alwaysOnTopItem = viewMenu.item(withTitle: "Always on Top") {
+            alwaysOnTopItem.state = alwaysOnTopEnabled ? .on : .off
+        }
+    }
 }
 
 // MARK: - Custom Window that preserves main menu
@@ -431,16 +464,19 @@ class MenuPreservingWindow: NSWindow {
 
 class PreviewWindowController: NSWindowController, NSWindowDelegate {
     private var hostingView: NSHostingView<PreviewContentView>?
+    private var previewView: NSView?
+    private var overlayHostingView: NSHostingView<ScrollIndicatorOverlay>?
     private weak var handTracker: HandTracker?
     
     convenience init(handTracker: HandTracker?) {
         let window = MenuPreservingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Hand Tracking Preview"
+        window.minSize = NSSize(width: 240, height: 180)
         window.center()
         window.isReleasedWhenClosed = false
         
@@ -448,11 +484,55 @@ class PreviewWindowController: NSWindowController, NSWindowDelegate {
         self.handTracker = handTracker
         window.delegate = self
         
-        let contentView = PreviewContentView(onStartTracking: { [weak self] in
-            self?.startTracking()
-        })
-        hostingView = NSHostingView(rootView: contentView)
-        window.contentView = hostingView
+        // Check if tracking is already active
+        if let tracker = handTracker, tracker.isCurrentlyTracking, let session = tracker.captureSession {
+            // Show live camera preview immediately
+            showCameraPreview(session: session, tracker: tracker)
+        } else {
+            // Show placeholder with start button
+            let contentView = PreviewContentView(onStartTracking: { [weak self] in
+                self?.startTracking()
+            })
+            hostingView = NSHostingView(rootView: contentView)
+            window.contentView = hostingView
+        }
+    }
+    
+    private func showCameraPreview(session: AVCaptureSession, tracker: HandTracker) {
+        guard let window = self.window else { return }
+        
+        // Create container view
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 360))
+        containerView.wantsLayer = true
+        containerView.autoresizesSubviews = true
+        
+        // Camera preview layer
+        let cameraView = NSView(frame: containerView.bounds)
+        cameraView.wantsLayer = true
+        cameraView.autoresizingMask = [.width, .height]
+        
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.frame = cameraView.bounds
+        layer.videoGravity = .resizeAspectFill
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        cameraView.layer = layer
+        cameraView.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        
+        containerView.addSubview(cameraView)
+        
+        // Overlay for scroll direction indicator
+        let overlayView = NSHostingView(rootView: ScrollIndicatorOverlay(tracker: tracker))
+        overlayView.frame = containerView.bounds
+        overlayView.autoresizingMask = [.width, .height]
+        // Make overlay background transparent
+        overlayView.layer?.backgroundColor = .clear
+        
+        containerView.addSubview(overlayView)
+        overlayHostingView = overlayView
+        
+        window.contentView = containerView
+        previewView = containerView
+        hostingView = nil
     }
     
     override func showWindow(_ sender: Any?) {
@@ -513,6 +593,89 @@ struct PreviewContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(30)
+    }
+}
+
+// MARK: - Scroll Indicator Overlay
+
+struct ScrollIndicatorOverlay: View {
+    @ObservedObject var tracker: HandTracker
+    @ObservedObject private var settings = AppSettings.shared
+    
+    var body: some View {
+        Group {
+            if settings.showOverlay {
+                VStack {
+                    Spacer()
+                    
+                    HStack {
+                        Spacer()
+                        
+                        // Scroll direction indicator
+                        VStack(spacing: 4) {
+                            // Detection status
+                            if settings.showHandDetectionStatus {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(tracker.isHandDetected ? Color.green : Color.red)
+                                        .frame(width: 10, height: 10)
+                                    
+                                    Text(tracker.isHandDetected ? "Hand Detected" : "No Hand")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                            
+                            // Fingers count
+                            if settings.showFingerCount && tracker.isHandDetected {
+                                Text("\(tracker.fingersExtendedCount) fingers")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            // Scroll direction arrow
+                            if settings.showScrollDirection {
+                                Group {
+                                    switch tracker.currentScrollDirection {
+                                    case .up:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.up.circle.fill")
+                                                .font(.title2)
+                                                .foregroundColor(.blue)
+                                            Text("Scroll Up")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                        }
+                                    case .down:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.down.circle.fill")
+                                                .font(.title2)
+                                                .foregroundColor(.orange)
+                                            Text("Scroll Down")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                        }
+                                    case .none:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "minus.circle")
+                                                .font(.title2)
+                                                .foregroundColor(.gray)
+                                            Text("Idle")
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding(12)
+                    }
+                }
+            }
+        }
     }
 }
 

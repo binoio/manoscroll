@@ -62,6 +62,20 @@ class AppSettings: ObservableObject {
         }
     }
     
+    // Overlay settings
+    @Published var showOverlay: Bool {
+        didSet { UserDefaults.standard.set(showOverlay, forKey: "showOverlay") }
+    }
+    @Published var showHandDetectionStatus: Bool {
+        didSet { UserDefaults.standard.set(showHandDetectionStatus, forKey: "showHandDetectionStatus") }
+    }
+    @Published var showFingerCount: Bool {
+        didSet { UserDefaults.standard.set(showFingerCount, forKey: "showFingerCount") }
+    }
+    @Published var showScrollDirection: Bool {
+        didSet { UserDefaults.standard.set(showScrollDirection, forKey: "showScrollDirection") }
+    }
+    
     private var isInitialized = false
     
     enum ScrollMode: String, CaseIterable {
@@ -95,6 +109,13 @@ class AppSettings: ObservableObject {
         self.accelerationFactor = UserDefaults.standard.object(forKey: "accelerationFactor") as? Double ?? 1.5
         self.showInDock = UserDefaults.standard.object(forKey: "showInDock") as? Bool ?? true
         self.showInMenuBar = UserDefaults.standard.object(forKey: "showInMenuBar") as? Bool ?? true
+        
+        // Overlay settings
+        self.showOverlay = UserDefaults.standard.object(forKey: "showOverlay") as? Bool ?? true
+        self.showHandDetectionStatus = UserDefaults.standard.object(forKey: "showHandDetectionStatus") as? Bool ?? true
+        self.showFingerCount = UserDefaults.standard.object(forKey: "showFingerCount") as? Bool ?? true
+        self.showScrollDirection = UserDefaults.standard.object(forKey: "showScrollDirection") as? Bool ?? true
+        
         self.isInitialized = true
     }
     
@@ -325,6 +346,19 @@ struct DisplayAppearanceTab: View {
                     .foregroundColor(.secondary)
             }
             
+            Section(header: Text("Overlay")) {
+                Toggle("Show Overlay", isOn: $settings.showOverlay)
+                Text("Display status information on the preview window")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if settings.showOverlay {
+                    Toggle("Hand Detection Status", isOn: $settings.showHandDetectionStatus)
+                    Toggle("Finger Count", isOn: $settings.showFingerCount)
+                    Toggle("Scroll Direction Indicator", isOn: $settings.showScrollDirection)
+                }
+            }
+            
             Section(header: Text("App Visibility")) {
                 Toggle("Show in Dock", isOn: $settings.showInDock)
                 Toggle("Show in Menu Bar", isOn: $settings.showInMenuBar)
@@ -384,6 +418,10 @@ struct PermissionsTab: View {
                     settings.accelerationFactor = 1.5
                     settings.showInDock = true
                     settings.showInMenuBar = true
+                    settings.showOverlay = true
+                    settings.showHandDetectionStatus = true
+                    settings.showFingerCount = true
+                    settings.showScrollDirection = true
                 }
                 .foregroundColor(.red)
             }

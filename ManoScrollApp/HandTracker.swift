@@ -4,6 +4,7 @@ import AVFoundation
 import AppKit
 import CoreGraphics
 import ApplicationServices
+import SwiftUI
 
 // Protocol for accessibility checking - allows mocking in tests
 protocol AccessibilityChecker {
@@ -42,14 +43,36 @@ class SystemScrollEventPoster: ScrollEventPoster {
     }
 }
 
+// Scroll direction for visual indicator
+enum ScrollDirection {
+    case none
+    case up
+    case down
+}
+
 class HandTracker: NSObject, ObservableObject {
-    private var captureSession: AVCaptureSession?
+    private(set) var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var handPoseRequest: VNDetectHumanHandPoseRequest?
     private var previewWindowController: NSWindowController?
     
+    // Public accessor for preview window
+    var previewWindow: NSWindow? {
+        return previewWindowController?.window
+    }
+    
     private var smoothedScroll: Double = 0.0
     private var isTracking = false
+    
+    // Published properties for UI updates
+    @Published var isHandDetected: Bool = false
+    @Published var currentScrollDirection: ScrollDirection = .none
+    @Published var fingersExtendedCount: Int = 0
+    
+    // Public accessor for tracking state
+    var isCurrentlyTracking: Bool {
+        return isTracking
+    }
     private var gestureStartTime: Date?
     private(set) var hasPromptedForAccessibility = false
     
@@ -145,26 +168,47 @@ class HandTracker: NSObject, ObservableObject {
         
         // Keep a strong reference to the window
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Hand Tracking Preview"
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        window.minSize = NSSize(width: 240, height: 180)
+        window.level = .normal  // Default to normal; Always on Top toggle controls this
+        window.collectionBehavior = [.canJoinAllSpaces]
         window.isReleasedWhenClosed = false
         window.delegate = self
         
-        let previewView = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
-        previewView.wantsLayer = true
+        // Create container view
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 360))
+        containerView.wantsLayer = true
+        containerView.autoresizesSubviews = true
+        
+        // Camera preview layer
+        let cameraView = NSView(frame: containerView.bounds)
+        cameraView.wantsLayer = true
+        cameraView.autoresizingMask = [.width, .height]
         
         let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.frame = previewView.bounds
+        layer.frame = cameraView.bounds
         layer.videoGravity = .resizeAspectFill
-        previewView.layer = layer
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        cameraView.layer = layer
+        cameraView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         
-        window.contentView = previewView
+        containerView.addSubview(cameraView)
+        
+        // Overlay for scroll direction indicator
+        let overlayView = NSHostingView(rootView: HandTrackerOverlay(tracker: self))
+        overlayView.frame = containerView.bounds
+        overlayView.autoresizingMask = [.width, .height]
+        // Make overlay background transparent
+        overlayView.layer?.backgroundColor = .clear
+        
+        containerView.addSubview(overlayView)
+        
+        window.contentView = containerView
         window.center()
         
         // Use NSWindowController to manage window lifecycle
@@ -190,6 +234,11 @@ class HandTracker: NSObject, ObservableObject {
             // Count extended fingers
             var fingersExtended = 0
             let minConfidence = Float(settings.detectionConfidence)
+            
+            // Update hand detection state on main thread
+            DispatchQueue.main.async {
+                self.isHandDetected = true
+            }
             
             // Check thumb (compare X position - direction depends on hand)
             if thumbTip.confidence > minConfidence &&
@@ -222,13 +271,23 @@ class HandTracker: NSObject, ObservableObject {
             
             // Determine scroll direction using configurable thresholds
             var targetScroll: Double = 0.0
+            var scrollDir: ScrollDirection = .none
             
             if fingersExtended >= settings.openPalmThreshold {
                 // Open palm - scroll up
                 targetScroll = settings.scrollSpeed
+                scrollDir = .up
             } else if fingersExtended <= settings.fistThreshold {
                 // Closed fist - scroll down
                 targetScroll = -settings.scrollSpeed
+                scrollDir = .down
+            }
+            
+            // Update published properties on main thread
+            let finalFingersCount = fingersExtended
+            DispatchQueue.main.async {
+                self.fingersExtendedCount = finalFingersCount
+                self.currentScrollDirection = scrollDir
             }
             
             // Apply dead zone
@@ -268,6 +327,10 @@ class HandTracker: NSObject, ObservableObject {
             // Hand pose points not available, decay scroll
             smoothedScroll *= settings.decayRate
             gestureStartTime = nil
+            DispatchQueue.main.async {
+                self.isHandDetected = false
+                self.currentScrollDirection = .none
+            }
         }
     }
     
@@ -307,6 +370,10 @@ extension HandTracker: AVCaptureVideoDataOutputSampleBufferDelegate {
                 // No hand detected, decay scroll
                 smoothedScroll *= settings.decayRate
                 gestureStartTime = nil
+                DispatchQueue.main.async {
+                    self.isHandDetected = false
+                    self.currentScrollDirection = .none
+                }
             }
         } catch {
             print("Hand pose detection error: \(error)")
@@ -318,5 +385,88 @@ extension HandTracker: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // When user closes the preview window, clear our reference
         previewWindowController = nil
+    }
+}
+
+// MARK: - Hand Tracker Overlay View
+
+struct HandTrackerOverlay: View {
+    @ObservedObject var tracker: HandTracker
+    @ObservedObject private var settings = AppSettings.shared
+    
+    var body: some View {
+        Group {
+            if settings.showOverlay {
+                VStack {
+                    Spacer()
+                    
+                    HStack {
+                        Spacer()
+                        
+                        // Scroll direction indicator
+                        VStack(spacing: 4) {
+                            // Detection status
+                            if settings.showHandDetectionStatus {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(tracker.isHandDetected ? Color.green : Color.red)
+                                        .frame(width: 10, height: 10)
+                                    
+                                    Text(tracker.isHandDetected ? "Hand Detected" : "No Hand")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                            
+                            // Fingers count
+                            if settings.showFingerCount && tracker.isHandDetected {
+                                Text("\(tracker.fingersExtendedCount) fingers")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            // Scroll direction arrow
+                            if settings.showScrollDirection {
+                                Group {
+                                    switch tracker.currentScrollDirection {
+                                    case .up:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.up.circle.fill")
+                                                .font(.title2)
+                                                .foregroundColor(.blue)
+                                            Text("Scroll Up")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                        }
+                                    case .down:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.down.circle.fill")
+                                                .font(.title2)
+                                                .foregroundColor(.orange)
+                                            Text("Scroll Down")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                        }
+                                    case .none:
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "minus.circle")
+                                                .font(.title2)
+                                                .foregroundColor(.gray)
+                                            Text("Idle")
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding(12)
+                    }
+                }
+            }
+        }
     }
 }
