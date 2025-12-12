@@ -52,25 +52,24 @@ final class MenuConsistencyUITests: XCTestCase {
 
     /// Test that "Close" menu item is disabled when there are no open windows
     func testCloseMenuDisabledWhenNoWindows() throws {
-        // Close any existing windows
-        for i in 0..<app.windows.count {
+        // Close any existing windows by trying to click their close buttons
+        for i in (0..<app.windows.count).reversed() {
             let w = app.windows.element(boundBy: i)
             if w.exists {
                 let closeButton = w.buttons[XCUIIdentifierCloseWindow]
-                if closeButton.exists {
+                if closeButton.exists && closeButton.isHittable {
                     closeButton.click()
-                    sleep(1)
                 }
             }
         }
-        // Wait for menus to update
-        sleep(1)
+        // Allow time for windows to close and menus to update
+        sleep(2)
 
         let fileMenu = app.menuBars.menuBarItems["File"]
-        XCTAssertTrue(fileMenu.exists, "File menu should exist")
+        XCTAssertTrue(fileMenu.waitForExistence(timeout: 5), "File menu should exist")
         fileMenu.click()
         let closeItem = app.menuItems["Close"]
-        XCTAssertTrue(closeItem.exists, "Close menu item should exist")
+        XCTAssertTrue(closeItem.waitForExistence(timeout: 5), "Close menu item should exist")
         XCTAssertFalse(closeItem.isEnabled, "Close should be disabled when no windows are open")
     }
     
