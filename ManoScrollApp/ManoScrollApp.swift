@@ -195,7 +195,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // File menu
         let fileMenuItem = NSMenuItem()
         let fileMenu = NSMenu(title: "File")
-        fileMenu.autoenablesItems = true
+        fileMenu.autoenablesItems = false
+        fileMenu.delegate = self
         let newPreviewItem = NSMenuItem(title: "New Hand Tracking Preview", action: #selector(newPreviewWindow), keyEquivalent: "n")
         newPreviewItem.target = self
         fileMenu.addItem(newPreviewItem)
