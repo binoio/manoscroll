@@ -19,6 +19,11 @@ let package = Package(
             name: "ManoScrollAppTests",
             dependencies: ["ManoScrollApp"],
             path: "Tests/ManoScrollAppTests"
+        ),
+        .testTarget(
+            name: "ManoScrollAppUITests",
+            dependencies: ["ManoScrollApp"],
+            path: "Tests/ManoScrollAppUITests"
         )
     ]
 )
