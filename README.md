@@ -239,7 +239,8 @@ To distribute ManoScroll outside the Mac App Store, you need to notarize it with
    codesign --deep --force --verify --verbose \
      --sign "Developer ID Application: Your Name (TEAM_ID)" \
      --options runtime \
-     ManoScroll.app
+  --entitlements "ManoScrollApp/Entitlements.plist" \
+  ManoScroll.app
    ```
 
 3. **Create a ZIP for notarization**:

@@ -35,7 +35,12 @@ echo "APPL????" > "$CONTENTS_DIR/PkgInfo"
 
 # Sign the app (ad-hoc signing for local use)
 echo "Signing app..."
-codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || echo "Warning: Signing failed, app may need manual signing"
+PROJECT_DIR="$(pwd)"
+IDENT="${IDENT:--}"
+
+# Sign the app using entitlements and hardened runtime (set IDENT to your Developer ID cert CN)
+echo "Signing app..."
+codesign --force --deep --verify --verbose --options runtime --entitlements "${PROJECT_DIR}/ManoScrollApp/Entitlements.plist" --sign "$IDENT" "$APP_DIR" 2>/dev/null || echo "Warning: Signing failed, app may need manual signing (set IDENT to your certificate common name)"
 
 echo ""
 echo "Build complete: $APP_DIR"
