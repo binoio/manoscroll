@@ -290,6 +290,46 @@ xcrun notarytool submit ManoScroll.zip \
   --wait
 ```
 
+### Repeatable hardened runtime + entitlements recipe
+
+If you want an explicit, repeatable flow (signed with Developer ID, hardened runtime, entitlements, notarize, staple, verify), use these commands and replace placeholders:
+
+```bash
+# Set your signing identity
+IDENT="Developer ID Application: Your Name (TEAM_ID)"
+
+# Build
+./build.sh
+
+# Sign app with hardened runtime and entitlements
+codesign --deep --force --verify --verbose \
+  --sign "$IDENT" \
+  --options runtime \
+  --entitlements "ManoScrollApp/Entitlements.plist" \
+  ManoScroll.app
+
+# Zip for notary submission
+ditto -c -k --keepParent ManoScroll.app ManoScroll.zip
+
+# Submit to notarytool (use keychain profile or Apple ID + app-specific password)
+xcrun notarytool submit ManoScroll.zip --keychain-profile "ManoScroll-Notarize" --wait
+
+# Staple notarization ticket
+xcrun stapler staple ManoScroll.app
+
+# Verify
+spctl --assess --type execute --verbose ManoScroll.app
+```
+
+Notes:
+- Ensure Entitlements.plist contains com.apple.security.device.camera = true and other needed entitlements before signing.
+- Test the stapled app from /Applications — macOS may suppress TCC prompts for translocated or un-notarized apps.
+- Reset TCC during testing if needed:
+  tccutil reset Camera com.manoscroll.app
+  tccutil reset Accessibility com.manoscroll.app
+
+Timestamp: 2025-12-13T04:11:21.326Z
+
 ## License
 
 [Add your license here]
