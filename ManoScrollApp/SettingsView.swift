@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -20,6 +21,12 @@ class AppSettings: ObservableObject {
     }
     @Published var showPreviewWindow: Bool {
         didSet { UserDefaults.standard.set(showPreviewWindow, forKey: "showPreviewWindow") }
+    }
+    @Published var allowContinuityCamera: Bool {
+        didSet { UserDefaults.standard.set(allowContinuityCamera, forKey: "allowContinuityCamera") }
+    }
+    @Published var selectedCameraUniqueID: String {
+        didSet { UserDefaults.standard.set(selectedCameraUniqueID, forKey: "selectedCameraUniqueID") }
     }
     @Published var decayRate: Double {
         didSet { UserDefaults.standard.set(decayRate, forKey: "decayRate") }
@@ -98,6 +105,8 @@ class AppSettings: ObservableObject {
         self.scrollThreshold = UserDefaults.standard.object(forKey: "scrollThreshold") as? Double ?? 0.3
         self.invertScroll = UserDefaults.standard.object(forKey: "invertScroll") as? Bool ?? false
         self.showPreviewWindow = UserDefaults.standard.object(forKey: "showPreviewWindow") as? Bool ?? true
+        self.allowContinuityCamera = UserDefaults.standard.object(forKey: "allowContinuityCamera") as? Bool ?? false
+        self.selectedCameraUniqueID = UserDefaults.standard.string(forKey: "selectedCameraUniqueID") ?? ""
         self.decayRate = UserDefaults.standard.object(forKey: "decayRate") as? Double ?? 0.8
         self.openPalmThreshold = UserDefaults.standard.object(forKey: "openPalmThreshold") as? Int ?? 4
         self.fistThreshold = UserDefaults.standard.object(forKey: "fistThreshold") as? Int ?? 1
@@ -156,6 +165,11 @@ struct SettingsView: View {
             DisplayAppearanceTab(settings: settings)
                 .tabItem {
                     Label("Appearance", systemImage: "paintbrush")
+                }
+
+            CameraTab(settings: settings)
+                .tabItem {
+                    Label("Camera", systemImage: "camera")
                 }
             
             PermissionsTab(settings: settings)
@@ -339,24 +353,17 @@ struct DisplayAppearanceTab: View {
     
     var body: some View {
         Form {
-            Section(header: Text("Camera Preview")) {
-                Toggle("Show Camera Preview Window", isOn: $settings.showPreviewWindow)
-                Text("Display live camera feed when tracking")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
             Section(header: Text("Overlay")) {
                 Toggle("Show Overlay", isOn: $settings.showOverlay)
                 Text("Display status information on the preview window")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
-                if settings.showOverlay {
-                    Toggle("Hand Detection Status", isOn: $settings.showHandDetectionStatus)
-                    Toggle("Finger Count", isOn: $settings.showFingerCount)
-                    Toggle("Scroll Direction Indicator", isOn: $settings.showScrollDirection)
-                }
+                    
+                    if settings.showOverlay {
+                        Toggle("Hand Detection Status", isOn: $settings.showHandDetectionStatus)
+                        Toggle("Finger Count", isOn: $settings.showFingerCount)
+                        Toggle("Scroll Direction Indicator", isOn: $settings.showScrollDirection)
+                    }
             }
             
             Section(header: Text("App Visibility")) {
@@ -365,6 +372,35 @@ struct DisplayAppearanceTab: View {
                 Text("At least one must be enabled")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct CameraTab: View {
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        Form {
+            Section(header: Text("Camera Preview")) {
+                Toggle("Show Camera Preview Window", isOn: $settings.showPreviewWindow)
+                Text("Display live camera feed when tracking")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Allow Continuity (iPhone) Camera", isOn: $settings.allowContinuityCamera)
+                Text("If enabled, remote cameras like Continuity Camera may be used")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("Camera", selection: $settings.selectedCameraUniqueID) {
+                    Text("System Default").tag("")
+                    ForEach(AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified).devices, id: \.uniqueID) { device in
+                        Text(device.localizedName).tag(device.uniqueID)
+                    }
+                }
+                .pickerStyle(.menu)
             }
         }
         .formStyle(.grouped)

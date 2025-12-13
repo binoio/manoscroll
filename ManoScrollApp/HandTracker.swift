@@ -111,7 +111,26 @@ class HandTracker: NSObject, ObservableObject {
         captureSession = AVCaptureSession()
         captureSession?.sessionPreset = .medium
         
-        guard let device = AVCaptureDevice.default(for: .video) else {
+        // Prefer built-in Wide Angle or Ultra Wide camera (avoid Continuity/remote camera) and fall back to the system default
+        // Allow explicit camera selection via settings, otherwise choose based on preference
+        let selectedID = AppSettings.shared.selectedCameraUniqueID
+        var preferredDevice: AVCaptureDevice? = nil
+
+        if !selectedID.isEmpty {
+            let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified)
+            preferredDevice = discovery.devices.first { $0.uniqueID == selectedID }
+        }
+
+        if preferredDevice == nil {
+            let allowContinuity = AppSettings.shared.allowContinuityCamera
+            if allowContinuity {
+                preferredDevice = AVCaptureDevice.default(for: .video)
+            } else {
+                preferredDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .unspecified) ?? AVCaptureDevice.default(for: .video)
+            }
+        }
+
+        guard let device = preferredDevice else {
             print("No video device available")
             return
         }

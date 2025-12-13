@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AppKit
 
 // MARK: - App State
 
@@ -12,9 +13,25 @@ class AppState: ObservableObject {
 
     let settings = AppSettings.shared
 
+    // Keep a strong reference to the preview window so it stays open
+    private(set) var previewWindow: NSWindow?
+
     init() {
         self.handTracker = HandTracker()
         checkCameraPermission()
+
+        // Create and show the hand tracking preview window on launch
+        DispatchQueue.main.async {
+            let previewView = PreviewWindowView(appState: self)
+            let hosting = NSHostingController(rootView: previewView)
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "Hand Tracking Preview"
+            window.setContentSize(NSSize(width: 480, height: 360))
+            window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            self.previewWindow = window
+        }
     }
 
     func startTracking() {
@@ -158,11 +175,17 @@ struct SettingsWindowView: View {
                 }
                 .tag(2)
 
+            CameraTab(settings: settings)
+                .tabItem {
+                    Label("Camera", systemImage: "camera")
+                }
+                .tag(3)
+
             PermissionsTab(settings: settings)
                 .tabItem {
                     Label("Permissions", systemImage: "lock.shield")
                 }
-                .tag(3)
+                .tag(4)
         }
         .frame(width: 550, height: 550)
         .padding()
