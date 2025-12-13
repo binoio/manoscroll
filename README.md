@@ -217,6 +217,173 @@ Tests use mock implementations of `AccessibilityChecker` and `ScrollEventPoster`
 3. Ensure tests pass: `swift test`
 4. Submit a pull request
 
+## Notarization
+
+To distribute ManoScroll outside the Mac App Store, you need to notarize it with Apple. This ensures users can run the app without Gatekeeper warnings.
+
+### Prerequisites
+
+1. **Apple Developer Program membership** (paid, $99/year)
+2. **Developer ID Application certificate** in your Keychain
+3. **App-specific password** for notarytool (create at appleid.apple.com)
+
+### Steps
+
+1. **Build the release app**:
+   ```bash
+   ./build.sh
+   ```
+
+2. **Sign with Developer ID** (replace with your Team ID):
+   ```bash
+   codesign --deep --force --verify --verbose \
+     --sign "Developer ID Application: Your Name (TEAM_ID)" \
+     --options runtime \
+  --entitlements "ManoScrollApp/Entitlements.plist" \
+  ManoScroll.app
+   ```
+
+3. **Create a ZIP for notarization**:
+   ```bash
+   ditto -c -k --keepParent ManoScroll.app ManoScroll.zip
+   ```
+
+4. **Submit for notarization**:
+   ```bash
+   xcrun notarytool submit ManoScroll.zip \
+     --apple-id "your@email.com" \
+     --team-id "TEAM_ID" \
+     --password "app-specific-password" \
+     --wait
+   ```
+
+5. **Staple the notarization ticket**:
+   ```bash
+   xcrun stapler staple ManoScroll.app
+   ```
+
+6. **Verify notarization**:
+   ```bash
+   spctl --assess --verbose ManoScroll.app
+   ```
+
+### Troubleshooting Notarization
+
+- **Hardened Runtime**: The `--options runtime` flag enables hardened runtime, required for notarization
+- **Entitlements**: Ensure `ManoScrollApp.entitlements` includes necessary permissions (camera, accessibility)
+- **Check submission status**: Use `xcrun notarytool log <submission-id>` to see detailed issues
+
+### Automating with Keychain
+
+Store credentials in Keychain to avoid typing passwords:
+```bash
+xcrun notarytool store-credentials "ManoScroll-Notarize" \
+  --apple-id "your@email.com" \
+  --team-id "TEAM_ID" \
+  --password "app-specific-password"
+```
+
+Then submit using:
+```bash
+xcrun notarytool submit ManoScroll.zip \
+  --keychain-profile "ManoScroll-Notarize" \
+  --wait
+```
+
+### Repeatable hardened runtime + entitlements recipe
+
+If you want an explicit, repeatable flow (signed with Developer ID, hardened runtime, entitlements, notarize, staple, verify), use these commands and replace placeholders:
+
+```bash
+# Set your signing identity
+IDENT="Developer ID Application: Your Name (TEAM_ID)"
+
+# Build
+./build.sh
+
+# Sign app with hardened runtime and entitlements
+codesign --deep --force --verify --verbose \
+  --sign "$IDENT" \
+  --options runtime \
+  --entitlements "ManoScrollApp/Entitlements.plist" \
+  ManoScroll.app
+
+# Zip for notary submission
+ditto -c -k --keepParent ManoScroll.app ManoScroll.zip
+
+# Submit to notarytool (use keychain profile or Apple ID + app-specific password)
+xcrun notarytool submit ManoScroll.zip --keychain-profile "ManoScroll-Notarize" --wait
+
+# Staple notarization ticket
+xcrun stapler staple ManoScroll.app
+
+# Verify
+spctl --assess --type execute --verbose ManoScroll.app
+```
+
+Notes:
+- Ensure Entitlements.plist contains com.apple.security.device.camera = true and other needed entitlements before signing.
+- Test the stapled app from /Applications — macOS may suppress TCC prompts for translocated or un-notarized apps.
+- Reset TCC during testing if needed:
+  tccutil reset Camera com.manoscroll.app
+  tccutil reset Accessibility com.manoscroll.app
+
+Timestamp: 2025-12-13T04:11:21.326Z
+
+## Submitting to the Mac App Store
+
+Below are step‑by‑step guidance and notes for preparing ManoScroll for Mac App Store (MAS) distribution. Follow these steps in order and test at each stage.
+
+1. Review macOS App Store suitability
+   - Verify all required app functionality is compatible with the App Sandbox. Accessibility (sending CGEvents to other apps) and other privileged system APIs may be restricted in MAS apps. If your app requires Accessibility to function, the MAS may not be suitable unless you rework the design.
+
+2. Enable App Sandbox and App Store entitlements
+   - In Xcode, open the app target → Signing & Capabilities → add App Sandbox capability.
+   - Set com.apple.security.app-sandbox = true in your entitlements file.
+   - Remove developer-only entitlements (e.g., com.apple.security.device.camera is allowed in MAS, but check any private or restricted entitlements).
+
+3. Add Info.plist usage strings
+   - Add NSCameraUsageDescription explaining why the app needs camera access.
+   - Add NSMicrophoneUsageDescription if audio is used.
+   - Ensure any other privacy keys (e.g., NSAppleEventsUsageDescription) are present if applicable.
+
+4. Configure code signing and provisioning
+   - Select a Mac App Distribution certificate (App Store) in Xcode's Signing & Capabilities.
+   - Ensure your provisioning profile is set to App Store distribution.
+
+5. Build an Archive and validate
+   - In Xcode: Product → Archive
+   - Use the Organizer to Validate the archive (this will run App Store validation checks).
+
+6. Upload to App Store Connect
+   - From Organizer, upload the validated archive to App Store Connect. Alternatively, use the Transporter app for bulk uploads.
+
+7. App Store Connect setup
+   - Create a new App record in App Store Connect (My Apps → +)
+   - Fill required metadata: app name, description, keywords, support URL, marketing URL
+   - Provide App Store screenshots for Mac (required sizes)
+   - Fill privacy questionnaire and any export compliance details
+
+8. Submit for review
+   - Choose the build you uploaded, answer the review questions, and submit for review.
+   - Monitor App Store Connect for review status and respond to reviewer questions.
+
+Notes and caveats
+- Accessibility and system-level input: Posting CGEvents or requiring Accessibility entitlements is typically incompatible with the App Sandbox. If ManoScroll must inject scroll events outside the sandbox, the App Store is likely not an option; distribution as a Developer ID‑signed notarized app is recommended.
+- If you can adapt the app to not require Accessibility (e.g., provide an alternative API or use accessibility APIs only with user opt-in and clear documentation), that increases chance of App Store acceptance.
+- Entitlements and sandbox differences: Your current Entitlements.plist for Developer ID notarization (non‑sandbox) will need adjustment for App Store: switch app sandbox to true, and add only the App Store allowed entitlements.
+
+Recommended checklist before submission
+- Replace developer/testing entitlements with an App Store entitlements file
+- Add required Info.plist usage descriptions
+- Test app thoroughly in sandbox mode
+- Archive and validate in Xcode
+- Prepare high-quality screenshots and privacy text
+
+We can now walk through each step interactively — which step would you like to start with?
+
+Timestamp: 2025-12-13T13:25:04.460Z
+
 ## License
 
 [Add your license here]

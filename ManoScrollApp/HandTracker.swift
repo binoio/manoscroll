@@ -54,13 +54,7 @@ class HandTracker: NSObject, ObservableObject {
     private(set) var captureSession: AVCaptureSession?
     private var videoOutput: AVCaptureVideoDataOutput?
     private var handPoseRequest: VNDetectHumanHandPoseRequest?
-    private var previewWindowController: NSWindowController?
-    
-    // Public accessor for preview window
-    var previewWindow: NSWindow? {
-        return previewWindowController?.window
-    }
-    
+
     private var smoothedScroll: Double = 0.0
     private var isTracking = false
     
@@ -95,15 +89,9 @@ class HandTracker: NSObject, ObservableObject {
     func startTracking() {
         guard !isTracking else { return }
         isTracking = true
-        
+
         setupCaptureSession()
-        
-        DispatchQueue.main.async {
-            if self.settings.showPreviewWindow {
-                self.showPreviewWindow()
-            }
-        }
-        
+
         captureSession?.startRunning()
         print("Hand tracking started")
     }
@@ -111,35 +99,38 @@ class HandTracker: NSObject, ObservableObject {
     func stopTracking() {
         guard isTracking else { return }
         isTracking = false
-        
-        // Hide preview window first, before stopping capture session
-        // Do this synchronously on main thread to avoid race conditions
-        if Thread.isMainThread {
-            cleanupPreviewWindow()
-        } else {
-            DispatchQueue.main.sync {
-                self.cleanupPreviewWindow()
-            }
-        }
-        
+
         captureSession?.stopRunning()
         captureSession = nil
         videoOutput = nil
-        
+
         print("Hand tracking stopped")
-    }
-    
-    private func cleanupPreviewWindow() {
-        // Close and release the window controller
-        previewWindowController?.close()
-        previewWindowController = nil
     }
     
     private func setupCaptureSession() {
         captureSession = AVCaptureSession()
         captureSession?.sessionPreset = .medium
         
-        guard let device = AVCaptureDevice.default(for: .video) else {
+        // Prefer built-in Wide Angle or Ultra Wide camera (avoid Continuity/remote camera) and fall back to the system default
+        // Allow explicit camera selection via settings, otherwise choose based on preference
+        let selectedID = AppSettings.shared.selectedCameraUniqueID
+        var preferredDevice: AVCaptureDevice? = nil
+
+        if !selectedID.isEmpty {
+            let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external], mediaType: .video, position: .unspecified)
+            preferredDevice = discovery.devices.first { $0.uniqueID == selectedID }
+        }
+
+        if preferredDevice == nil {
+            let allowContinuity = AppSettings.shared.allowContinuityCamera
+            if allowContinuity {
+                preferredDevice = AVCaptureDevice.default(for: .video)
+            } else {
+                preferredDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .unspecified) ?? AVCaptureDevice.default(for: .video)
+            }
+        }
+
+        guard let device = preferredDevice else {
             print("No video device available")
             return
         }
@@ -161,60 +152,6 @@ class HandTracker: NSObject, ObservableObject {
         if captureSession?.canAddOutput(videoOutput!) == true {
             captureSession?.addOutput(videoOutput!)
         }
-    }
-    
-    private func showPreviewWindow() {
-        guard previewWindowController == nil, let session = captureSession else { return }
-        
-        // Keep a strong reference to the window
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Hand Tracking Preview"
-        window.minSize = NSSize(width: 240, height: 180)
-        window.level = .normal  // Default to normal; Always on Top toggle controls this
-        window.collectionBehavior = [.canJoinAllSpaces]
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        
-        // Create container view
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 360))
-        containerView.wantsLayer = true
-        containerView.autoresizesSubviews = true
-        
-        // Camera preview layer
-        let cameraView = NSView(frame: containerView.bounds)
-        cameraView.wantsLayer = true
-        cameraView.autoresizingMask = [.width, .height]
-        
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.frame = cameraView.bounds
-        layer.videoGravity = .resizeAspectFill
-        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        cameraView.layer = layer
-        cameraView.layerContentsRedrawPolicy = .onSetNeedsDisplay
-        
-        containerView.addSubview(cameraView)
-        
-        // Overlay for scroll direction indicator
-        let overlayView = NSHostingView(rootView: HandTrackerOverlay(tracker: self))
-        overlayView.frame = containerView.bounds
-        overlayView.autoresizingMask = [.width, .height]
-        // Make overlay background transparent
-        overlayView.layer?.backgroundColor = .clear
-        
-        containerView.addSubview(overlayView)
-        
-        window.contentView = containerView
-        window.center()
-        
-        // Use NSWindowController to manage window lifecycle
-        let controller = NSWindowController(window: window)
-        controller.showWindow(nil)
-        previewWindowController = controller
     }
     
     private func processHandPose(_ observation: VNHumanHandPoseObservation) {
@@ -378,13 +315,6 @@ extension HandTracker: AVCaptureVideoDataOutputSampleBufferDelegate {
         } catch {
             print("Hand pose detection error: \(error)")
         }
-    }
-}
-
-extension HandTracker: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        // When user closes the preview window, clear our reference
-        previewWindowController = nil
     }
 }
 
