@@ -155,7 +155,7 @@ struct SettingsView: View {
             
             DisplayAppearanceTab(settings: settings)
                 .tabItem {
-                    Label("Display", systemImage: "display")
+                    Label("Appearance", systemImage: "paintbrush")
                 }
             
             PermissionsTab(settings: settings)
@@ -163,7 +163,7 @@ struct SettingsView: View {
                     Label("Permissions", systemImage: "lock.shield")
                 }
         }
-        .frame(width: 550, height: 450)
+        .frame(width: 550, height: 550)
         .padding()
     }
 }

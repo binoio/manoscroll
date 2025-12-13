@@ -217,6 +217,78 @@ Tests use mock implementations of `AccessibilityChecker` and `ScrollEventPoster`
 3. Ensure tests pass: `swift test`
 4. Submit a pull request
 
+## Notarization
+
+To distribute ManoScroll outside the Mac App Store, you need to notarize it with Apple. This ensures users can run the app without Gatekeeper warnings.
+
+### Prerequisites
+
+1. **Apple Developer Program membership** (paid, $99/year)
+2. **Developer ID Application certificate** in your Keychain
+3. **App-specific password** for notarytool (create at appleid.apple.com)
+
+### Steps
+
+1. **Build the release app**:
+   ```bash
+   ./build.sh
+   ```
+
+2. **Sign with Developer ID** (replace with your Team ID):
+   ```bash
+   codesign --deep --force --verify --verbose \
+     --sign "Developer ID Application: Your Name (TEAM_ID)" \
+     --options runtime \
+     ManoScroll.app
+   ```
+
+3. **Create a ZIP for notarization**:
+   ```bash
+   ditto -c -k --keepParent ManoScroll.app ManoScroll.zip
+   ```
+
+4. **Submit for notarization**:
+   ```bash
+   xcrun notarytool submit ManoScroll.zip \
+     --apple-id "your@email.com" \
+     --team-id "TEAM_ID" \
+     --password "app-specific-password" \
+     --wait
+   ```
+
+5. **Staple the notarization ticket**:
+   ```bash
+   xcrun stapler staple ManoScroll.app
+   ```
+
+6. **Verify notarization**:
+   ```bash
+   spctl --assess --verbose ManoScroll.app
+   ```
+
+### Troubleshooting Notarization
+
+- **Hardened Runtime**: The `--options runtime` flag enables hardened runtime, required for notarization
+- **Entitlements**: Ensure `ManoScrollApp.entitlements` includes necessary permissions (camera, accessibility)
+- **Check submission status**: Use `xcrun notarytool log <submission-id>` to see detailed issues
+
+### Automating with Keychain
+
+Store credentials in Keychain to avoid typing passwords:
+```bash
+xcrun notarytool store-credentials "ManoScroll-Notarize" \
+  --apple-id "your@email.com" \
+  --team-id "TEAM_ID" \
+  --password "app-specific-password"
+```
+
+Then submit using:
+```bash
+xcrun notarytool submit ManoScroll.zip \
+  --keychain-profile "ManoScroll-Notarize" \
+  --wait
+```
+
 ## License
 
 [Add your license here]
