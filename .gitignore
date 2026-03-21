@@ -1,9 +1,16 @@
 # Build artifacts
 .build/
+build/
+dist/
 ManoScroll.app/
+*.zip
 *.xcodeproj/
 *.xcworkspace/
 DerivedData/
+
+# ship-it
+.ship-it.state
+.ship-it.record
 
 # Swift Package Manager
 .swiftpm/
