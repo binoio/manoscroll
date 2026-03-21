@@ -213,29 +213,10 @@
             <h1>ManoScroll</h1>
             <p class="subtitle">Scroll a window with hand gesture recognition.</p>
             <div class="cta-container">
-                <a href="https://github.com/binoio/manoscroll/releases/latest" class="cta" id="download-btn">Download for macOS</a>
-                <span class="version-info">Requires macOS 14.0 or later • <span id="version-number"></span></span>
+                <a href="https://github.com/binoio/manoscroll/releases/download/v1.0.0/ManoScroll.zip" class="cta" id="download-btn">Download for macOS</a>
+                <span class="version-info">Requires macOS 14.0 or later • <span id="version-number">v1.0.0</span></span>
             </div>
         </header>
-
-        <script>
-            async function updateDownloadLink() {
-                try {
-                    const response = await fetch('https://api.github.com/repos/binoio/manoscroll/releases/latest');
-                    const data = await response.json();
-                    const zipAsset = data.assets.find(asset => asset.name.endsWith('.zip')) || data.assets.find(asset => asset.name.endsWith('.dmg'));
-                    
-                    if (zipAsset) {
-                        const btn = document.getElementById('download-btn');
-                        btn.href = zipAsset.browser_download_url;
-                        document.getElementById('version-number').innerText = data.tag_name;
-                    }
-                } catch (error) {
-                    console.error('Error fetching latest release:', error);
-                }
-            }
-            updateDownloadLink();
-        </script>
 
         <section class="features">
             <div class="feature-card">
