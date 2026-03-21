@@ -23,6 +23,15 @@ cp "$BUILD_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 # Copy Info.plist
 cp ManoScrollApp/Info.plist "$CONTENTS_DIR/Info.plist"
 
+# Determine version
+VERSION="${APP_VERSION:-1.0.0}"
+if [[ -z "${APP_VERSION:-}" && -f "VERSION" ]]; then
+    VERSION=$(tr -d '[:space:]' < VERSION)
+fi
+
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "${CONTENTS_DIR}/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "${CONTENTS_DIR}/Info.plist"
+
 # Copy app icon
 if [[ -f "AppIcon.icns" ]]; then
     cp AppIcon.icns "$RESOURCES_DIR/AppIcon.icns"
